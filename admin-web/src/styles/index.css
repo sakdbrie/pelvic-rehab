@@ -1,0 +1,98 @@
+/* ============================================================
+ * 全局样式（视觉基准取自原型图 ui/prototype/web-interactive-prototype）
+ * 主题色 #1E9E8F（原型按钮/高亮色）、背景 #E9EBEE、卡片白底圆角 12px
+ * ============================================================ */
+
+:root {
+  /* Element-Plus 主题覆盖：主色改为原型同款青色 */
+  --el-color-primary: #1e9e8f;
+  --el-color-primary-light-3: #5bb8ac;
+  --el-color-primary-light-5: #8ecfc6;
+  --el-color-primary-light-7: #c2e5e0;
+  --el-color-primary-light-8: #dcefec;
+  --el-color-primary-light-9: #eef7f6;
+  --el-color-primary-dark-2: #187e72;
+  --el-border-radius-base: 8px;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #e9ebee;
+  color: #111827;
+  font-size: 14px;
+}
+
+/* 原型卡片风格 */
+.prototype-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* 原型表格风格 */
+.prototype-table.el-table {
+  --el-table-border-color: #f0f1f3;
+  --el-table-header-bg-color: #f9fafb;
+  --el-table-header-text-color: #374151;
+  font-size: 13px;
+}
+.prototype-table .el-table__header th {
+  font-weight: 600;
+}
+
+/* 标题层级（对应原型 .h1/.h2/.h3） */
+.h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #6b7280;
+  letter-spacing: 0.3px;
+}
+.h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+}
+.h3 {
+  font-size: 13px;
+  color: #374151;
+}
+
+/* 状态标签（原型 .tag） */
+.tag-ok {
+  color: #1e9e8f;
+  background: #e6f4f2;
+  border: none;
+}
+.tag-red {
+  color: #dc2626;
+  background: #fdecec;
+  border: none;
+}
+.tag-gray {
+  color: #6b7280;
+  background: #f3f4f6;
+  border: none;
+}
+
+/* 页面通用间距 */
+.page-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}

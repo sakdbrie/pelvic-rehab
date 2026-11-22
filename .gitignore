@@ -1,0 +1,40 @@
+# ===== 所有前端项目通用忽略 (适配通配符，不用一个个写) =====
+**/node_modules/
+**/dist/
+**/dist-ssr/
+*.local
+**/.vite/
+**/.eslintcache
+
+# 前端日志
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# ===== 后端 (Spring Boot 多模块) 通用忽略 =====
+# 不带路径前缀的 target/、build/ 可匹配任意层级（含 server 下各子模块）
+target/
+build/
+!server/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+logs/
+*.log
+
+# ===== 环境变量与敏感文件 =====
+# 注意：.env.development 目前只含本地开发配置（VITE_API_BASE、VITE_APP_TITLE），无敏感信息，建议提交。
+# 若将来写入密码等敏感信息，请取消下面这行注释：
+# **/.env.development
+.env
+.env.local
+.env.*.local
+
+# ===== 编辑器与系统文件 =====
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
