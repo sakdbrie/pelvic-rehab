@@ -9,23 +9,24 @@
     <!-- 医生信息 -->
     <div class="prototype-card">
       <div class="profile-top">
-        <div class="avatar">陈</div>
+        <div class="avatar">{{ me?.name?.charAt(0) || '用' }}</div>
         <div>
           <div class="pt-name">
-            陈医生
+            {{ me?.name ?? '—' }}
             <el-tag size="small" class="tag-ok">医生</el-tag>
           </div>
-          <div class="pt-sub">盆底康复科 · 医生编号 D001</div>
+          <div class="pt-sub">{{ me?.deptName ?? '—' }} · 医生编号 {{ me?.userId ?? '—' }}</div>
         </div>
         <el-button type="primary" size="small" style="margin-left: auto" @click="openModal">修改密码</el-button>
       </div>
 
       <div class="h1" style="margin-top: 12px">基本信息</div>
       <div class="info-grid">
-        <div v-for="it in info" :key="it.k" class="info-item">
-          <span class="k">{{ it.k }}</span>
-          <span class="v" :class="{ pwd: it.k === '密码' }">{{ it.k === '密码' ? mask : it.v }}</span>
-        </div>
+        <div class="info-item"><span class="k">姓名</span><span class="v">{{ me?.name ?? '—' }}</span></div>
+        <div class="info-item"><span class="k">医生 ID</span><span class="v">{{ me?.userId ?? '—' }}</span></div>
+        <div class="info-item"><span class="k">科室</span><span class="v">{{ me?.deptName ?? '—' }}</span></div>
+        <div class="info-item"><span class="k">电话号</span><span class="v">{{ me?.phone ?? '—' }}</span></div>
+        <div class="info-item"><span class="k">密码</span><span class="v pwd">********</span></div>
       </div>
     </div>
 
@@ -60,28 +61,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { changePassword, logout } from '@/api/auth'
+import { changePassword, getMe, logout } from '@/api/auth'
+import type { MeInfo } from '@/api/auth'
+import { setToken } from '@/utils/auth'
 import { useUserStore } from '@/stores/user'
 
-// 原型图：08 个人主页（网页后台）——信息展示、修改密码弹窗（校验：原密码正确/不少于6位/两次一致）、退出登录
 const router = useRouter()
 const userStore = useUserStore()
 
-// TODO: 替换为接口数据（当前登录用户信息）
-const info = [
-  { k: '姓名', v: '陈医生' },
-  { k: '医生 ID', v: 'D001' },
-  { k: '科室', v: '盆底康复科' },
-  { k: '电话号', v: '139****0000' },
-  { k: '密码', v: '' },
-]
+const me = ref<MeInfo | null>(null)
 
-/* 当前密码（原型占位数据） */
-let currentPwd = '123456'
-const mask = computed(() => '*'.repeat(currentPwd.length))
+onMounted(async () => {
+  try {
+    me.value = await getMe()
+  } catch {
+    return
+  }
+})
 
 const modalVisible = ref(false)
 const oldPwd = ref('')
@@ -101,28 +100,36 @@ function closeModal() {
   errMsg.value = ''
 }
 
-function onOk() {
+async function onOk() {
   const o = oldPwd.value.trim()
   const n = newPwd.value.trim()
   const c = confirmPwd.value.trim()
 
   if (!o) return (errMsg.value = '请输入原密码')
-  if (o !== currentPwd) return (errMsg.value = '原密码不正确')
   if (!n) return (errMsg.value = '请输入新密码')
   if (n.length < 6) return (errMsg.value = '新密码长度不少于 6 位')
   if (n !== c) return (errMsg.value = '两次输入的新密码不一致')
 
-  currentPwd = n
-  modalVisible.value = false
-  // TODO: 联调后端修改密码接口（api/auth.ts changePassword）
-  void changePassword({ oldPassword: o, newPassword: n })
-  ElMessage.success('密码修改成功（原型占位）')
+  try {
+    await changePassword({ oldPassword: o, newPassword: n })
+    ElMessage.success('密码修改成功')
+    modalVisible.value = false
+    oldPwd.value = ''
+    newPwd.value = ''
+    confirmPwd.value = ''
+  } catch {
+    return
+  }
 }
 
 async function onLogout() {
   await ElMessageBox.confirm('确定要退出登录吗？', '提示', { type: 'warning' })
-  // TODO: 联调后端登出接口（api/auth.ts logout）
-  void logout()
+  try {
+    await logout()
+  } catch {
+    /* 即使接口失败也继续登出 */
+  }
+  setToken(null)
   userStore.setUserInfo(null)
   router.push('/login')
 }

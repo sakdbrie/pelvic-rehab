@@ -38,3 +38,8 @@ logs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+# ===== 编译产物与本地配置 =====
+*.tsbuildinfo
+admin-web/src/**/*.js
+**/export/
+application-local.yml

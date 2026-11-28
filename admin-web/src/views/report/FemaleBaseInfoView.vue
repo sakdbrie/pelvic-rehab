@@ -15,7 +15,7 @@
     </div>
 
     <div class="prototype-card" style="padding: 0">
-      <el-table :data="pagedRows" class="prototype-table" height="calc(100vh - 250px)" style="width: 100%">
+      <el-table v-loading="loading" :data="rows" class="prototype-table" height="calc(100vh - 250px)" style="width: 100%">
         <el-table-column
           v-for="c in COLS"
           :key="c[0]"
@@ -31,17 +31,15 @@
 
     <div class="prototype-card pager-row">
       <span class="info">共 {{ total }} 条，当前显示第 {{ total === 0 ? 0 : (currentPage - 1) * 10 + 1 }}-{{ Math.min(currentPage * 10, total) }} 条</span>
-      <el-pagination v-model:current-page="currentPage" :page-size="10" :total="total" layout="prev, pager, next" background />
+      <el-pagination v-model:current-page="currentPage" :page-size="10" :total="total" layout="prev, pager, next" background @current-change="onPageChange" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { useTablePage } from '@/composables/useTablePage'
-import { submitExportTask } from '@/api/report'
+import { getReportData, exportReport } from '@/api/report'
 
 // 原型图：07-1 女性基础信息表（网页后台）
 const router = useRouter()
@@ -114,120 +112,53 @@ const COLS: [string, string, boolean][] = [
   ['supplement', '其它补充（可上传照片）', true],
 ]
 
-// ============ 示例数据（原型占位：60 位女性患者） ============
-// TODO: 替换为接口数据（api/report.ts getReportData, reportType=female）
-const surnames = ['王', '李', '张', '刘', '陈', '杨', '赵', '黄', '周', '吴', '徐', '孙', '马', '朱', '胡', '林', '郭', '何', '高', '罗']
-const givenNames = ['丽', '梅', '伟', '芳', '娜', '敏', '静', '强', '磊', '洋', '艳', '勇', '军', '杰', '涛', '婷', '雪', '鹏', '宇', '鑫']
-const exerciseArr = ['无规律运动', '每周跑步 3 次', '每周瑜伽 2 次', '每日快走 30 分钟']
-const marriageArr = ['已婚', '未婚', '离异']
-const educationArr = ['初中', '高中', '大学', '研究生']
-const jobArr = ['全职类工作', '教师', '公务员', '自由职业', '服务业', '企业职员']
-const stoolArr = ['正常', '便秘', '腹泻']
-const urineArr = ['正常', '尿失禁', '尿频', '尿急']
-const sleepArr = ['左侧', '右侧', '平躺']
-const reactionArr = ['无', '轻微', '明显']
-const assistArr = ['无', '会阴侧切', '产钳']
-const deliveryArr = ['顺产', '剖宫产']
-const yesNo = ['是', '否']
-const painArr = ['无', '有']
-
-function pad2(n: number) {
-  return n < 10 ? '0' + n : String(n)
-}
-function ymd(y: number, m: number) {
-  return `${y}-${pad2(m)}`
-}
-
-const allData: Record<string, string | number>[] = Array.from({ length: 60 }, (_, idx) => {
-  const i = idx + 1
-  const birthY = 1980 + (i % 18)
-  const preW = 46 + (i % 16)
-  const anteW = preW + 10 + (i % 8)
-  const isMenopause = i % 10 === 0
-  return {
-    id: 'P' + String(i).padStart(3, '0'),
-    name: surnames[i % surnames.length] + givenNames[(i * 3) % givenNames.length],
-    gender: '女',
-    birth: ymd(birthY, 1 + (i % 12)),
-    age: 2026 - birthY,
-    phone: '138' + String(1000 + i * 7).slice(-4) + '****',
-    height: 152 + (i % 20) + ' cm',
-    weight: 46 + (i % 24) + ' Kg',
-    exercise: exerciseArr[i % exerciseArr.length],
-    marriage: marriageArr[i % marriageArr.length],
-    education: educationArr[i % educationArr.length],
-    lifestyle: `抽烟 ${i % 5} 支/天，喝酒 ${(i * 10) % 100} ml/天，茶/咖啡 ${100 + ((i * 20) % 300)} ml/天，久坐 ${4 + (i % 6)} h/天，久站 ${1 + (i % 4)} h/天`,
-    job: jobArr[i % jobArr.length],
-    mPeriod: 3 + (i % 5) + ' 天',
-    mCycle: 25 + (i % 8) + ' 天',
-    dysmenorrhea: i % 3 === 0 ? '有' : '无',
-    menopause: isMenopause ? '是' : '否',
-    lastPeriod: ymd(2026, 1 + (i % 9)),
-    menopauseDate: isMenopause ? ymd(2018 + (i % 6), 1 + (i % 12)) : '—',
-    fsd: i % 4 === 0 ? '性交疼痛' : '—',
-    stoolInfo: stoolArr[i % stoolArr.length],
-    urineInfo: urineArr[i % urineArr.length],
-    sexLife: `频率 ${i % 4} 次/周，无冶游史`,
-    surgery: i % 5 === 0 ? `${ymd(2015 + (i % 8), 1 + (i % 12))} 腔镜手术` : '无',
-    pastHistory: i % 6 === 0 ? '高血压' : '无特殊',
-    deliveryDate: ymd(2012 + (i % 12), 1 + (i % 12)),
-    pregCount: 1 + (i % 3) + ' 次',
-    birthCount: 1 + (i % 2) + ' 次',
-    abortionCount: (i % 3) + ' 次',
-    deliveryMode: deliveryArr[i % 2],
-    painless: yesNo[i % 2],
-    cephalic: yesNo[(i + 1) % 2],
-    assist: assistArr[i % assistArr.length],
-    fetalWeight: (2.8 + (i % 10) / 10).toFixed(1) + ' Kg',
-    preWeight: preW + ' Kg',
-    anteWeight: anteW + ' Kg',
-    gainWeight: anteW - preW + ' Kg',
-    sleepPos: sleepArr[i % sleepArr.length],
-    urineIncon: i % 3 === 0 ? '压力性' : '无',
-    stoolPreg: i % 2 === 0 ? '正常' : '便秘',
-    bp: '正常',
-    glucose: '正常',
-    thyroid: '—',
-    backPain: painArr[i % 2],
-    pubicPain: painArr[(i + 1) % 2],
-    legPain: painArr[(i + 2) % 2],
-    pregnancyReaction: reactionArr[i % reactionArr.length],
-    itch: painArr[i % 2],
-    diet: '正常',
-    sexLifePreg: '无',
-    chief: '—',
-    painInfo: '—',
-    abdTension: '正常',
-    inspection: '正常',
-    specialTest: '-',
-    nerveTest: '正常',
-    analPalpation: '正常',
-    ultrasound: '未上传',
-    xray: '未上传',
-    urodynamics: '未上传',
-    otherExam: '未上传',
-    diagnosis: '—',
-    medication: '—',
-    supplement: '—',
-  }
-})
-
+// ============ 接口数据（api/report.ts getReportData, reportType=female） ============
 const keyword = ref('')
-const filterFn = (row: (typeof allData)[number]) => {
-  const kw = keyword.value.trim().toLowerCase()
-  return kw === '' || (row.id + ' ' + row.name).toLowerCase().includes(kw)
+const rows = ref<Record<string, unknown>[]>([])
+const total = ref(0)
+const loading = ref(false)
+const currentPage = ref(1)
+
+function buildParams() {
+  return {
+    keyword: keyword.value.trim() || undefined,
+    page: currentPage.value,
+    size: 10,
+  }
 }
-const { currentPage, total, pagedRows, resetPage } = useTablePage(() => allData, filterFn, 10)
+
+async function fetch() {
+  loading.value = true
+  try {
+    const res = await getReportData('female', buildParams())
+    rows.value = res.records
+    total.value = res.total
+  } catch {
+    /* 错误已由 request 统一提示 */
+  } finally {
+    loading.value = false
+  }
+}
 
 function doSearch() {
-  resetPage()
+  currentPage.value = 1
+  fetch()
 }
 
-function onExport() {
-  // TODO: 联调后端异步导出任务（架构文档：提交导出任务 → 轮询 → 下载签名 URL）
-  void submitExportTask('female', {})
-  ElMessage.success('导出任务已提交（原型占位）')
+function onPageChange(page: number) {
+  currentPage.value = page
+  fetch()
 }
+
+async function onExport() {
+  try {
+    await exportReport('female', buildParams())
+  } catch {
+    return
+  }
+}
+
+onMounted(fetch)
 </script>
 
 <style scoped>

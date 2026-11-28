@@ -295,65 +295,310 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { saveSupplement } from '@/api/system'
+import { getPatientDetail, saveSupplement, type PatientDetail } from '@/api/system'
 
 // 原型图：02 用户信息详情页面（网页后台-患者）——只读档案 + 医生"补充"临床检查
 const route = useRoute()
 const router = useRouter()
 
-// TODO: 替换为接口数据（api/system.ts getPatientDetail）
-const basicInfo = [
-  { k: '姓名', v: '王丽' },
-  { k: '性别', v: '女' },
-  { k: '出生年月', v: '1994-03' },
-  { k: '年龄', v: '32' },
-  { k: '联系电话', v: '138****0000' },
-  { k: '身高', v: '162cm' },
-  { k: '体重', v: '55Kg' },
-  { k: '从事职业', v: '全职类工作' },
-  { k: '婚姻状况', v: '已婚' },
-  { k: '教育程度', v: '大学' },
-  { k: '既往运动情况', v: '每周跑步 3 次', full: true },
-  { k: '生活习惯', v: '抽烟 0 支/天，喝酒 0 ml/天，茶/咖啡 200 ml/天，久坐 6 h/天，久站 2 h/天', full: true },
-]
+interface InfoItem {
+  k: string
+  v: string
+  full?: boolean
+}
 
-const historyInfo = [
-  { k: '月经史', v: '未绝经；末次月经：2026-09，持续时间 5 天，周期 28 天，无痛经', full: true },
-  { k: '女性性功能障碍（ICD-11分类）', v: '—' },
-  { k: '大便情况', v: '正常' },
-  { k: '小便情况', v: '尿失禁' },
-  { k: '性生活', v: '频率 1 次/周，无冶游史' },
-  { k: '手术史', v: '2020-06 腔镜手术' },
-  { k: '既往史', v: '无特殊' },
-]
+interface ReadSection {
+  title: string
+  value?: string
+  items?: string[]
+}
 
-const pregnancyInfo = [
-  { k: '产科史', v: '怀孕 2 次，分娩 1 次，流产 1 次；最近分娩日期：2020-06' },
-  { k: '分娩方式', v: '剖宫产；无痛分娩：否；头位正常分娩：否；助产方式：无；胎儿出生体重：3.2 Kg' },
-  { k: '孕期情况', v: '孕前 50 kg · 产前 62 kg · 增重 12 Kg；睡觉体位：左侧；孕期尿失禁：无；孕期大便：便秘；血压：正常；血糖：正常；甲状腺功能：—；无腰背痛，无耻骨疼痛，无下肢疼痛；妊娠反应：轻微；会阴瘙痒：无；饮食情况：正常；孕期性生活：无', full: true },
-]
+type Pregnancy = PatientDetail['pregnancies'][number]
+type LatestExam = NonNullable<PatientDetail['latestExam']>
 
-const readSections = [
-  { title: '主诉', value: '—' },
-  { title: '腹直肌分离', value: '无' },
-  { title: '产后情况', items: ['小便：无', '大便：正常', '盆腔、会阴痛：无', '脏器脱垂：无', '瘢痕：无', '尿道不稳定性：—', '其他：—'] },
-  { title: '疼痛情况', items: ['腰背痛（左/右/中）：0 / 0 / 0', '骶髂关节痛（左/右/中）：0 / 0 / 0', '耻骨疼痛：0', '尾骨痛（左/右/中）：0 / 0 / 0', '坐骨神经痛（左/右）：0 / 0', '腹股沟疼痛（左/右）：0 / 0', '颈痛（左/右）：0 / 0', '上肢痛（左/右）：0 / 0', '下肢痛（左/右）：0 / 0'] },
-  { title: '盆底视诊', items: ['外阴：正常', '阴道裂口：正常', '尿道口：正常', '阴蒂：正常', '阴唇对称性：是', '分泌物情况：无', '阴毛：正常', '痔疮：无', 'VALSALVA动作：正常', '其他：—'] },
-  { title: '特殊检查', items: ['泌尿生殖测试：-', '疤痕试验：-', '4字试验-左：-', '4字试验-右：-', '骨盆分离试验：-', '骨盆挤压试验：-', '骶骨下压试验：-', '股骨冲击试验：-', '直腿抬高试验：-', '直腿抬高加强试验：-', '广泛性触诊试验：-', '其他：—'] },
-  { title: '神经损伤查体', items: ['盆底张力：正常', '感觉-左：正常', '感觉-右：正常', '导尿管：无'] },
-  { title: '触诊', items: ['肛提肌：正常', '坐尾肌：正常', '髂尾肌：正常', '闭孔内肌：正常', '脏器偏移：正常', '牛津肌力：— 级'] },
-  { title: '盆底超声（可上传照片）', value: '未上传' },
-  { title: 'X-Ray检查（可上传照片）', value: '未上传' },
-  { title: '尿动力学检查（可上传照片）', value: '未上传' },
-  { title: '其他检查（可上传照片）', value: '未上传' },
-  { title: '诊断', value: '—' },
-  { title: '药物治疗', value: '—' },
-  { title: '其它补充（可上传照片）', value: '—' },
-]
+/** 字符串/数字空值统一显示为 '—' */
+function dash(v: string | number | null | undefined): string {
+  return v == null || v === '' ? '—' : String(v)
+}
+
+/** 数值格式化：整数不带小数点，小数最多保留两位 */
+function num(v: number | null | undefined): string {
+  if (v == null) return '—'
+  return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(2)))
+}
+
+/** 布尔值展示，缺省为 '—' */
+function yesNo(v: boolean | null | undefined, yes = '有', no = '无'): string {
+  return v == null ? '—' : v ? yes : no
+}
+
+/** 特殊检查 '+'/'-' 直取，缺省为 '-' */
+function plusMinus(v: string | null | undefined): string {
+  return v ? v : '-'
+}
+
+const detail = ref<PatientDetail | null>(null)
+
+/** 最近一次分娩（deliveryDate 最大的记录） */
+const latestDelivery = computed<Pregnancy | null>(() => {
+  const delivered = (detail.value?.pregnancies ?? []).filter((p) => !!p.deliveryDate)
+  if (!delivered.length) return null
+  return delivered.reduce((a, b) => ((a.deliveryDate as string) >= (b.deliveryDate as string) ? a : b))
+})
+
+/** 最近一次妊娠记录（pregnancyNo 最大的记录） */
+const latestPregnancy = computed<Pregnancy | null>(() => {
+  const list = detail.value?.pregnancies ?? []
+  if (!list.length) return null
+  return list.reduce((a, b) => (a.pregnancyNo >= b.pregnancyNo ? a : b))
+})
+
+const basicInfo = computed<InfoItem[]>(() => {
+  const d = detail.value
+  const hp = d?.healthProfile
+  const habits = [
+    hp?.smokingPerDay != null ? `抽烟 ${num(hp.smokingPerDay)} 支/天` : '',
+    hp?.alcoholMlPerDay != null ? `喝酒 ${num(hp.alcoholMlPerDay)} ml/天` : '',
+    hp?.teaCoffeeMlPerDay != null ? `茶/咖啡 ${num(hp.teaCoffeeMlPerDay)} ml/天` : '',
+    hp?.sedentaryHoursPerDay != null ? `久坐 ${num(hp.sedentaryHoursPerDay)} h/天` : '',
+    hp?.standingHoursPerDay != null ? `久站 ${num(hp.standingHoursPerDay)} h/天` : '',
+  ]
+    .filter(Boolean)
+    .join('，')
+
+  return [
+    { k: '姓名', v: dash(d?.name) },
+    { k: '性别', v: dash(d?.gender) },
+    { k: '出生年月', v: d?.birthDate ? d.birthDate.slice(0, 7) : '—' },
+    { k: '年龄', v: num(d?.age) },
+    { k: '联系电话', v: dash(d?.phone) },
+    { k: '身高', v: d?.heightCm != null ? `${num(d.heightCm)}cm` : '—' },
+    { k: '体重', v: d?.weightKg != null ? `${num(d.weightKg)}Kg` : '—' },
+    { k: '从事职业', v: dash(d?.job) },
+    { k: '婚姻状况', v: dash(d?.marriage) },
+    { k: '教育程度', v: dash(d?.education) },
+    { k: '既往运动情况', v: dash(hp?.pastExerciseLifeSupplement), full: true },
+    { k: '生活习惯', v: habits || '—', full: true },
+  ]
+})
+
+const historyInfo = computed<InfoItem[]>(() => {
+  const d = detail.value
+  const hp = d?.healthProfile
+
+  let menstruation = '—'
+  if (hp && hp.menopause != null) {
+    menstruation = hp.menopause
+      ? `已绝经；绝经年龄 ${num(hp.menopauseAge)}`
+      : `未绝经；末次月经：${dash(hp.lastMenstrualDate)}，持续时间 ${num(hp.menstruationDays)} 天，周期 ${num(hp.cycleDays)} 天，痛经VAS ${num(hp.dysmenorrheaVas)}`
+  }
+
+  const sexLife =
+    hp?.sexFrequencyWeekly != null
+      ? `频率 ${num(hp.sexFrequencyWeekly)} 次/周，冶游史：${yesNo(hp.promiscuityHistory)}`
+      : '—'
+
+  const surgeries = (d?.surgeries ?? [])
+    .map((s) => `${s.surgeryDate ? s.surgeryDate + ' ' : ''}${s.surgeryName}`)
+    .join('；')
+
+  const conditions = (d?.conditions ?? []).map((c) => `${c.category}：${c.itemName}`).join('；')
+
+  return [
+    { k: '月经史', v: menstruation, full: true },
+    { k: '女性性功能障碍（ICD-11分类）', v: '—' },
+    { k: '大便情况', v: dash(hp?.stool) },
+    { k: '小便情况', v: dash(hp?.urine) },
+    { k: '性生活', v: sexLife },
+    { k: '手术史', v: surgeries || '—' },
+    { k: '既往史', v: conditions || '—' },
+  ]
+})
+
+const pregnancyInfo = computed<InfoItem[]>(() => {
+  const list = detail.value?.pregnancies ?? []
+  if (!list.length) {
+    return [
+      { k: '产科史', v: '—', full: true },
+      { k: '分娩方式', v: '—' },
+      { k: '孕期情况', v: '—', full: true },
+    ]
+  }
+
+  const total = list.length
+  const delivered = list.filter((p) => !!p.deliveryDate).length
+  const lastDelivery = latestDelivery.value
+  const obstetrics = `怀孕 ${total} 次，分娩 ${delivered} 次，流产 ${total - delivered} 次；最近分娩日期：${dash(lastDelivery?.deliveryDate)}`
+
+  const delivery = lastDelivery
+    ? `${dash(lastDelivery.deliveryMethod)}；无痛分娩：${yesNo(lastDelivery.painlessDelivery, '是', '否')}；头位正常分娩：${yesNo(lastDelivery.cephalicDelivery, '是', '否')}；助产方式：${dash(lastDelivery.deliveryAssist)}；胎儿出生体重：${num(lastDelivery.babyBirthWeightKg)} Kg`
+    : '—'
+
+  const p = latestPregnancy.value
+  const pregnancy = p
+    ? `孕前 ${num(p.preWeightKg)} kg · 产前 ${num(p.prenatalWeightKg)} kg · 增重 ${num(p.weightGainKg)} Kg；睡觉体位：${dash(p.sleepPosition)}；孕期尿失禁：${yesNo(p.incontinence)}；孕期大便：${dash(p.stool)}；血压：${dash(p.bloodPressure)}；血糖：${dash(p.bloodSugar)}；甲状腺功能：${dash(p.thyroidFunction)}；腰背痛VAS ${num(p.backPainVas)}，耻骨疼痛VAS ${num(p.pubicPainVas)}，下肢疼痛VAS ${num(p.lowerLimbPainVas)}；妊娠反应：${dash(p.reactionLevel)}；会阴瘙痒：${yesNo(p.perinealItching)}；饮食情况：${dash(p.diet)}；孕期性生活：${yesNo(p.sexLife)}`
+    : '—'
+
+  return [
+    { k: '产科史', v: obstetrics, full: true },
+    { k: '分娩方式', v: delivery },
+    { k: '孕期情况', v: pregnancy, full: true },
+  ]
+})
+
+/** latestExam 为空时的默认只读结构：标题保持不变，值全为 '—' */
+function emptyReadSections(): ReadSection[] {
+  return [
+    { title: '主诉', value: '—' },
+    { title: '腹直肌分离', value: '—' },
+    { title: '产后情况', items: ['小便：—', '大便：—', '盆腔、会阴痛：—', '脏器脱垂：—', '瘢痕：—', '尿道不稳定性：—', '其他：—'] },
+    { title: '疼痛情况', items: ['腰背痛（左/右/中）：— / — / —', '骶髂关节痛（左/右/中）：— / — / —', '耻骨疼痛：—', '尾骨痛（左/右/中）：— / — / —', '坐骨神经痛（左/右）：— / —', '腹股沟疼痛（左/右）：— / —', '颈痛（左/右）：— / —', '上肢痛（左/右）：— / —', '下肢痛（左/右）：— / —'] },
+    { title: '盆底视诊', items: ['外阴：—', '阴道裂口：—', '尿道口：—', '阴蒂：—', '阴唇对称性：—', '分泌物情况：—', '阴毛：—', '痔疮：—', 'VALSALVA动作：—'] },
+    { title: '特殊检查', items: ['泌尿生殖测试：—', '疤痕试验：—', '4字试验-左：—', '4字试验-右：—', '骨盆分离试验：—', '骨盆挤压试验：—', '骶骨下压试验：—', '股骨冲击试验：—', '直腿抬高试验：—', '直腿抬高加强试验：—', '广泛性触诊试验：—', '其他：—'] },
+    { title: '神经损伤查体', items: ['盆底张力：—', '感觉-左：—', '感觉-右：—', '导尿管：—'] },
+    { title: '触诊', items: ['肛提肌：—', '坐尾肌：—', '髂尾肌：—', '闭孔内肌：—', '脏器偏移：—', '牛津肌力：— 级'] },
+    { title: '盆底超声（可上传照片）', value: '—' },
+    { title: 'X-Ray检查（可上传照片）', value: '—' },
+    { title: '尿动力学检查（可上传照片）', value: '—' },
+    { title: '其他检查（可上传照片）', value: '—' },
+    { title: '诊断', value: '—' },
+    { title: '药物治疗', value: '—' },
+    { title: '其它补充（可上传照片）', value: '—' },
+  ]
+}
+
+/** notes 中是否有包含关键词且标记“已上传”的记录 */
+function uploadedStatus(notes: LatestExam['notes'], keyword: string): string {
+  return notes.some((n) => n.content.includes(keyword) && n.content.includes('已上传')) ? '已上传' : '未上传'
+}
+
+const readSections = computed<ReadSection[]>(() => {
+  const exam = detail.value?.latestExam
+  if (!exam) return emptyReadSections()
+
+  const ex = exam.examination
+  const dia = exam.diastasis
+  const pp = exam.postpartum
+  const pain = exam.painAssessment
+  const insp = exam.pelvicInspection
+  const sp = exam.specialExam
+  const neuro = exam.neurologicalExam
+  const palp = exam.analPalpation
+
+  return [
+    { title: '主诉', value: dash(ex?.chief) },
+    {
+      title: '腹直肌分离',
+      value: dia
+        ? `有：静息（肚脐 ${num(dia.restingUmbilicus)} / 脐上 ${num(dia.restingAbove)} / 脐下 ${num(dia.restingBelow)}），收缩（肚脐 ${num(dia.contractionUmbilicus)} / 脐上 ${num(dia.contractionAbove)} / 脐下 ${num(dia.contractionBelow)}）`
+        : '无',
+    },
+    {
+      title: '产后情况',
+      items: [
+        `小便：${dash(pp?.urine)}`,
+        `大便：${dash(pp?.stool)}`,
+        `盆腔、会阴痛：${num(pp?.pelvicPerinealPainVas ?? 0)}`,
+        `脏器脱垂：${dash(pp?.organProlapse)}`,
+        `瘢痕：${
+          pp?.scar
+            ? `有（质地 ${dash(pp.scarTexture)}、颜色 ${dash(pp.scarColor)}、时间 ${dash(pp.scarDate)}、长度 ${num(pp.scarLengthCm)}cm）`
+            : '无'
+        }`,
+        `尿道不稳定性：${yesNo(pp?.urethralInstability)}`,
+        `其他：${dash(pp?.other)}`,
+      ],
+    },
+    {
+      title: '疼痛情况',
+      items: [
+        `腰背痛（左/右/中）：${num(pain?.backPainLeftVas ?? 0)} / ${num(pain?.backPainRightVas ?? 0)} / ${num(pain?.backPainCenterVas ?? 0)}`,
+        `骶髂关节痛（左/右/中）：${num(pain?.siJointPainLeftVas ?? 0)} / ${num(pain?.siJointPainRightVas ?? 0)} / ${num(pain?.siJointPainCenterVas ?? 0)}`,
+        `耻骨疼痛：${num(pain?.pubicPainVas ?? 0)}`,
+        `尾骨痛（左/右/中）：${num(pain?.coccyxPainLeftVas ?? 0)} / ${num(pain?.coccyxPainRightVas ?? 0)} / ${num(pain?.coccyxPainCenterVas ?? 0)}`,
+        `坐骨神经痛（左/右）：${num(pain?.sciaticPainLeftVas ?? 0)} / ${num(pain?.sciaticPainRightVas ?? 0)}`,
+        `腹股沟疼痛（左/右）：${num(pain?.groinPainLeftVas ?? 0)} / ${num(pain?.groinPainRightVas ?? 0)}`,
+        `颈痛（左/右）：${num(pain?.neckPainLeftVas ?? 0)} / ${num(pain?.neckPainRightVas ?? 0)}`,
+        `上肢痛（左/右）：${num(pain?.armPainLeftVas ?? 0)} / ${num(pain?.armPainRightVas ?? 0)}`,
+        `下肢痛（左/右）：${num(pain?.legPainLeftVas ?? 0)} / ${num(pain?.legPainRightVas ?? 0)}`,
+      ],
+    },
+    {
+      title: '盆底视诊',
+      items: [
+        `外阴：${dash(insp?.vulva)}`,
+        `阴道裂口：${dash(insp?.vaginalTear)}`,
+        `尿道口：${dash(insp?.urethralMeatus)}`,
+        `阴蒂：${dash(insp?.clitoris)}`,
+        `阴唇对称性：${yesNo(insp?.labiaSymmetry, '是', '否')}`,
+        `分泌物情况：${
+          insp?.discharge
+            ? `有（颜色 ${dash(insp.dischargeColor)}、气味 ${dash(insp.dischargeSmell)}、质地 ${dash(insp.dischargeTexture)}、量 ${dash(insp.dischargeAmount)}）`
+            : '无'
+        }`,
+        `阴毛：${dash(insp?.pubicHair)}`,
+        `痔疮：${dash(insp?.hemorrhoids)}`,
+        `VALSALVA动作：${dash(insp?.valsalva)}`,
+      ],
+    },
+    {
+      title: '特殊检查',
+      items: [
+        `泌尿生殖测试：${plusMinus(sp?.urogenitalTest)}`,
+        `疤痕试验：${plusMinus(sp?.scarTest)}`,
+        `4字试验-左：${plusMinus(sp?.faberLeft)}`,
+        `4字试验-右：${plusMinus(sp?.faberRight)}`,
+        `骨盆分离试验：${plusMinus(sp?.pelvicSeparation)}`,
+        `骨盆挤压试验：${plusMinus(sp?.pelvicCompression)}`,
+        `骶骨下压试验：${plusMinus(sp?.sacralCompression)}`,
+        `股骨冲击试验：${plusMinus(sp?.femoralImpaction)}`,
+        `直腿抬高试验：${plusMinus(sp?.straightLegRaise)}`,
+        `直腿抬高加强试验：${plusMinus(sp?.straightLegRaiseReinforced)}`,
+        `广泛性触诊试验：${plusMinus(sp?.palpationTest)}`,
+        `其他：${dash(sp?.other)}`,
+      ],
+    },
+    {
+      title: '神经损伤查体',
+      items: [
+        `盆底张力：${dash(neuro?.pelvicFloorTone)}`,
+        `感觉-左：${dash(neuro?.leftSensation)}`,
+        `感觉-右：${dash(neuro?.rightSensation)}`,
+        `导尿管：${yesNo(neuro?.catheter)}`,
+      ],
+    },
+    {
+      title: '触诊',
+      items: [
+        `肛提肌：${dash(palp?.levatorAni)}`,
+        `坐尾肌：${dash(palp?.coccygeus)}`,
+        `髂尾肌：${dash(palp?.iliococcygeus)}`,
+        `闭孔内肌：${dash(palp?.obturatorInternus)}`,
+        `脏器偏移：${dash(palp?.organShift)}`,
+        `牛津肌力：${palp?.oxfordGrade != null ? `${num(palp.oxfordGrade)} 级` : '— 级'}`,
+      ],
+    },
+    { title: '盆底超声（可上传照片）', value: uploadedStatus(exam.notes, '盆底超声') },
+    { title: 'X-Ray检查（可上传照片）', value: uploadedStatus(exam.notes, 'X-Ray') },
+    { title: '尿动力学检查（可上传照片）', value: uploadedStatus(exam.notes, '尿动力学') },
+    { title: '其他检查（可上传照片）', value: uploadedStatus(exam.notes, '其他检查') },
+    { title: '诊断', value: dash(ex?.diagnosis) },
+    { title: '药物治疗', value: dash(ex?.medication) },
+    { title: '其它补充（可上传照片）', value: dash(ex?.otherSupplement) },
+  ]
+})
+
+onMounted(async () => {
+  try {
+    detail.value = await getPatientDetail(String(route.params.id))
+  } catch {
+    return
+  }
+})
 
 const editing = ref(false)
 
@@ -440,11 +685,14 @@ const form = reactive({
   supplement: '',
 })
 
-function onSave() {
-  // TODO: 联调后端保存接口（api/system.ts saveSupplement）
-  void saveSupplement(String(route.params.id), { ...form })
-  ElMessage.success('补充已保存（原型占位）')
-  editing.value = false
+async function onSave() {
+  try {
+    await saveSupplement(String(route.params.id), { ...form })
+    ElMessage.success('补充已保存')
+    editing.value = false
+  } catch {
+    return
+  }
 }
 </script>
 

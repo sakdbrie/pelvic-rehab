@@ -3,7 +3,9 @@
   <div class="login-bg">
     <div class="login-card">
       <div class="brand">
-        <el-icon :size="44" color="#1E9E8F"><Lock /></el-icon>
+        <el-icon :size="44" color="#1E9E8F">
+          <Lock />
+        </el-icon>
         <div class="brand-title">盆底康复管理 · 网页后台</div>
       </div>
 
@@ -16,14 +18,8 @@
       <!-- 密码登录 -->
       <div v-show="tab === 'pwd'" class="panel">
         <el-input v-model="form.phone" placeholder="请输入手机号" autocomplete="username" />
-        <el-input
-          v-model="form.password"
-          type="password"
-          placeholder="请输入密码"
-          autocomplete="current-password"
-          show-password
-          @keyup.enter="onLogin"
-        />
+        <el-input v-model="form.password" type="password" placeholder="请输入密码" autocomplete="current-password"
+          show-password @keyup.enter="onLogin" />
         <el-button type="primary" class="login-btn" @click="onLogin">登 录</el-button>
       </div>
 
@@ -47,8 +43,8 @@ import { ElMessage } from 'element-plus'
 import { Lock } from '@element-plus/icons-vue'
 import { loginByPassword, loginBySms, sendSmsCode } from '@/api/auth'
 import { useUserStore } from '@/stores/user'
+import { setToken } from '@/utils/auth'
 
-// 原型图：00 后台登录页（网页后台）——密码/短信双模式切换，登录后进入用户管理
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -59,29 +55,54 @@ const form = reactive({
   smsCode: '',
 })
 
-function onSendCode() {
-  if (!form.phone) {
-    ElMessage.warning('请输入手机号')
+async function onSendCode() {
+  if (!form.phone || !/^1[3-9]\d{9}$/.test(form.phone)) {
+    ElMessage.warning(form.phone ? '请输入正确的手机号格式' : '请输入手机号')
     return
   }
-  // TODO: 联调后端短信验证码接口
-  void sendSmsCode(form.phone)
-  ElMessage.success('验证码已发送（原型占位）')
+  try {
+    await sendSmsCode(form.phone)
+    ElMessage.success('验证码已发送')
+  } catch {
+    return
+  }
 }
 
-function onLogin() {
-  // TODO: 联调后端登录接口（loginByPassword / loginBySms），成功后写入真实用户信息与权限码
-  void (tab.value === 'pwd' ? loginByPassword({ phone: form.phone, password: form.password }) : loginBySms({ phone: form.phone, smsCode: form.smsCode }))
-  // 原型占位：默认以医生身份进入用户管理（原型图登录后展示 01-2 医生身份页面）
-  userStore.setUserInfo({
-    userId: 'D001',
-    name: '陈医生',
-    role: 'DOCTOR',
-    deptName: '盆底康复科',
-    phone: '139****0000',
-    permissions: [],
-  })
-  router.push('/user')
+async function onLogin() {
+  // 校验 phone、password、smsCode 是否已填且格式正确
+  if (!form.phone || !/^1[3-9]\d{9}$/.test(form.phone)) {
+    ElMessage.warning(form.phone ? '请输入正确的手机号格式' : '请输入手机号')
+    return
+  }
+  if (tab.value === 'pwd') {
+    if (!form.password) {
+      ElMessage.warning('请输入密码')
+      return
+    }
+  } else if (tab.value === 'sms') {
+    if (!form.smsCode || form.smsCode.length !== 6) {
+      ElMessage.warning('请输入 6 位短信验证码')
+      return
+    }
+  }
+
+  try {
+    const res = tab.value === 'pwd'
+      ? await loginByPassword({ phone: form.phone, password: form.password })
+      : await loginBySms({ phone: form.phone, smsCode: form.smsCode })
+    setToken(res.accessToken)
+    userStore.setUserInfo({
+      userId: res.user.userId ?? '',
+      name: res.account.nickname,
+      role: res.user.roleCode === 'ADMIN' ? 'ADMIN' : 'DOCTOR',
+      deptName: '',
+      phone: '',
+      permissions: res.user.permissions,
+    })
+    router.push('/user')
+  } catch {
+    /* 拦截器已提示 */
+  }
 }
 </script>
 
@@ -93,6 +114,7 @@ function onLogin() {
   justify-content: center;
   background: linear-gradient(135deg, #eaf6f4, #f7f8fa);
 }
+
 .login-card {
   width: 360px;
   background: #fff;
@@ -103,22 +125,26 @@ function onLogin() {
   flex-direction: column;
   gap: 12px;
 }
+
 .brand {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
 }
+
 .brand-title {
   font-size: 17px;
   font-weight: 700;
 }
+
 .tabs {
   display: flex;
   background: #f3f4f6;
   border-radius: 8px;
   padding: 3px;
 }
+
 .tab {
   flex: 1;
   text-align: center;
@@ -128,23 +154,28 @@ function onLogin() {
   color: #6b7280;
   cursor: pointer;
 }
+
 .tab.on {
   background: #fff;
   color: #1e9e8f;
   font-weight: 600;
 }
+
 .panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+
 .code-row {
   display: flex;
   gap: 8px;
 }
+
 .sms-btn {
   flex-shrink: 0;
 }
+
 .login-btn {
   width: 100%;
 }

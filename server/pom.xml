@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.3.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.pelvic</groupId>
+  <artifactId>pelvic-rehab</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>pelvic-rehab</name>
+  <description>盆底康复管理平台后端（网页后台优先，依据 docs/后端实现逻辑.md 实现）</description>
+
+  <properties>
+    <java.version>17</java.version>
+    <mybatis-plus.version>3.5.7</mybatis-plus.version>
+    <easyexcel.version>3.3.4</easyexcel.version>
+  </properties>
+
+  <modules>
+    <module>pelvic-common/pelvic-common-core</module>
+    <module>pelvic-common/pelvic-common-mybatis</module>
+    <module>pelvic-common/pelvic-common-security</module>
+    <module>pelvic-common/pelvic-common-web</module>
+    <module>pelvic-modules/module-auth</module>
+    <module>pelvic-modules/module-system</module>
+    <module>pelvic-modules/module-patient</module>
+    <module>pelvic-modules/module-doctor</module>
+    <module>pelvic-modules/module-report</module>
+    <module>pelvic-api</module>
+    <module>pelvic-boot</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.baomidou</groupId>
+        <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        <version>${mybatis-plus.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>easyexcel</artifactId>
+        <version>${easyexcel.version}</version>
+      </dependency>
+      <!-- 内部模块 -->
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>pelvic-common-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>pelvic-common-mybatis</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>pelvic-common-security</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>pelvic-common-web</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>module-auth</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>module-system</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>module-patient</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>module-doctor</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.pelvic</groupId>
+        <artifactId>module-report</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+</project>

@@ -3,7 +3,7 @@
   <div class="page-main">
     <div class="back-row">
       <el-link type="primary" :underline="false" @click="router.push('/dashboard')">‹ 返回</el-link>
-      <span class="detail-title">患者数据详情：王丽</span>
+      <span class="detail-title">患者数据详情：{{ patientName || route.params.id }}</span>
     </div>
 
     <div class="detail-wrap">
@@ -13,12 +13,12 @@
           <!-- 时间筛选 -->
           <div class="filter-line">
             <span class="cap">时间：</span>
-            <el-date-picker v-model="range" type="daterange" value-format="YYYY-MM-DD" start-placeholder="起始日期" end-placeholder="结束日期" size="small" />
+            <el-date-picker v-model="range" type="daterange" value-format="YYYY-MM-DD" start-placeholder="起始日期" end-placeholder="结束日期" size="small" @change="fetch" />
           </div>
           <!-- 数据状态筛选 -->
           <div class="filter-line">
             <span class="cap">数据状态：</span>
-            <el-radio-group v-model="dataFilter" size="small">
+            <el-radio-group v-model="dataFilter" size="small" @change="fetch">
               <el-radio-button value="all">全部</el-radio-button>
               <el-radio-button value="alert">异常</el-radio-button>
               <el-radio-button value="normal">正常</el-radio-button>
@@ -29,7 +29,7 @@
         <div class="panel-cap">记录数据（点击列名或单元格查看趋势 / 打卡记录 / 自评量表）</div>
 
         <div class="prototype-card" style="padding: 0">
-          <el-table :data="filteredRecords" class="prototype-table" height="calc(100vh - 320px)" @cell-click="onCellClick" @header-click="onHeaderClick">
+          <el-table v-loading="loading" :data="records" class="prototype-table" height="calc(100vh - 320px)" @cell-click="onCellClick" @header-click="onHeaderClick">
             <el-table-column prop="date" label="时间" width="105" />
             <el-table-column prop="urine" label="排尿次数" width="110" :class-name="colClass('urine')">
               <template #default="{ row }">
@@ -64,7 +64,7 @@
         <ChartCard v-if="activeCol !== 'check'" :title="chartTitle" :sub="chartSub" :tip="chartTip" :option="chartOption">
           <template #extra>
             <div v-if="activeCol === 'scale'" class="scale-legend">
-              <span v-for="s in SCALES" :key="s.key"><i :style="{ background: s.color }"></i>{{ s.name }}</span>
+              <span v-for="s in scales" :key="s.key"><i :style="{ background: SCALE_COLORS[s.key] || '#1E9E8F' }"></i>{{ s.name }}</span>
             </div>
           </template>
         </ChartCard>
@@ -85,19 +85,19 @@
           <div class="cal">
             <div v-for="(d, i) in calCells" :key="i" class="d" :class="{ off: d.off, on: d.date === selDate }" @click="d.date && pickDay(d.date)">
               {{ d.day }}
-              <i v-if="d.date && checkMap[d.date]" />
+              <i v-if="d.date && checkins[d.date]" />
             </div>
           </div>
           <div class="day-list">
             <div class="cap">{{ selDate }} 打卡记录</div>
-            <div v-for="(r, i) in checkMap[selDate] || []" :key="i" class="row">
+            <div v-for="(r, i) in checkins[selDate] || []" :key="i" class="row">
               <div class="grow">
                 <div>{{ r.time }} {{ r.title }}</div>
                 <div class="s">{{ r.sub }}</div>
               </div>
-              <el-tag size="small" :class="r.done ? 'tag-ok' : 'tag-gray'">{{ r.tag }}</el-tag>
+              <el-tag size="small" :class="r.done ? 'tag-ok' : 'tag-gray'">{{ r.done ? '已完成' : '未完成' }}</el-tag>
             </div>
-            <div v-if="!(checkMap[selDate] || []).length" class="empty">当日暂无打卡记录</div>
+            <div v-if="!(checkins[selDate] || []).length" class="empty">当日暂无打卡记录</div>
           </div>
         </div>
       </div>
@@ -106,22 +106,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import ChartCard from '@/components/ChartCard.vue'
+import { getPatientRecords, type CheckinItem, type RecordRow, type ScaleInfo, type ScalePoint } from '@/api/report'
 
 // 原型图：05 患者数据详情页面（网页后台）——记录表 + 点击列查看趋势/打卡日历/自评量表
 const router = useRouter()
-
-interface DayRecord {
-  date: string
-  urine: number
-  stool: number
-  water: number
-  isAlert: boolean
-  isDone: boolean
-}
+const route = useRoute()
 
 const COLUMNS: Record<string, { name: string; unit: string; color: string }> = {
   urine: { name: '排尿次数', unit: '次', color: '#1E9E8F' },
@@ -129,28 +122,19 @@ const COLUMNS: Record<string, { name: string; unit: string; color: string }> = {
   water: { name: '饮水量', unit: 'ml', color: '#3B82F6' },
 }
 
-const SCALES = [
-  { key: 'pfdi20', name: 'PFDI-20', fullName: '盆底功能障碍简表', color: '#1E9E8F', max: 300 },
-  { key: 'pisq12', name: 'PISQ-12', fullName: '盆腔脏器脱垂/尿失禁性功能问卷', color: '#F59E0B', max: 48 },
-  { key: 'iiq7', name: 'IIQ-7', fullName: '尿失禁影响问卷简表', color: '#3B82F6', max: 21 },
-  { key: 'pfmuscle', name: '盆底肌力', fullName: '盆底肌力自评量表', color: '#7C3AED', max: 100 },
-  { key: 'fsfi', name: 'FSFI', fullName: '女性性功能指数', color: '#EC4899', max: 36 },
-  { key: 'pacsym', name: 'PAC-SYM', fullName: '便秘患者症状自评量表', color: '#10B981', max: 60 },
-  { key: 'iciq', name: 'ICI-Q-SF', fullName: '国际尿失禁咨询问卷简表', color: '#EF4444', max: 21 },
-  { key: 'oabq', name: 'OAB-q', fullName: '膀胱过度活动症问卷', color: '#8B5CF6', max: 100 },
-  { key: 'pfiq7', name: 'PFIQ-7', fullName: '盆底影响问卷简表', color: '#0EA5E9', max: 300 },
-]
+/** 量表 key → 颜色（量表名称与满分以后端 scales 为准） */
+const SCALE_COLORS: Record<string, string> = {
+  pfdi20: '#1E9E8F',
+  pisq12: '#F59E0B',
+  iiq7: '#3B82F6',
+  pfmuscle: '#7C3AED',
+  fsfi: '#EC4899',
+  pacsym: '#10B981',
+  iciq: '#EF4444',
+  oabq: '#8B5CF6',
+  pfiq7: '#0EA5E9',
+}
 
-const TRAIN_POOL = [
-  { title: '3s慢肌训练', sub: '语音视频 · 3分钟' },
-  { title: '快肌训练', sub: '语音视频 · 3分钟' },
-  { title: '盆底肌感知训练', sub: '动画视频 · 5分钟' },
-  { title: '三维腹式呼吸训练', sub: '动画视频 · 4分钟' },
-]
-const TRAIN_TIMES = ['09:00', '15:00', '20:30']
-
-// ============ 示例数据（原型占位：近 30 天记录 + 打卡明细 + 量表历史） ============
-// TODO: 替换为接口数据（api/report.ts getPatientRecords）
 function dateStr(offsetDays: number) {
   const d = new Date()
   d.setDate(d.getDate() + offsetDays)
@@ -158,64 +142,63 @@ function dateStr(offsetDays: number) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-const records: DayRecord[] = Array.from({ length: 30 }, (_, idx) => {
-  const i = 29 - idx
-  const seed = 30 - i
-  const urine = 3 + Math.round(2 * Math.sin(seed / 3.2) + 2 * Math.random())
-  return {
-    date: dateStr(-i),
-    urine,
-    stool: Math.max(1, Math.round(1.5 * Math.sin(seed / 5) + Math.random() + 1)),
-    water: 800 + Math.round(300 * Math.sin(seed / 4) + 250 * Math.random()),
-    isAlert: urine >= 6,
-    isDone: seed % 4 !== 0,
-  }
-})
-
-const checkMap: Record<string, { time: string; title: string; sub: string; tag: string; done: boolean }[]> = {}
-records.forEach((r) => {
-  if (!r.isDone) return
-  const seed = parseInt(r.date.slice(-2), 10)
-  const count = 1 + (seed % 2)
-  checkMap[r.date] = Array.from({ length: count }, (_, k) => {
-    const t = TRAIN_POOL[(seed + k) % TRAIN_POOL.length]
-    return { time: TRAIN_TIMES[k % TRAIN_TIMES.length], title: t.title, sub: t.sub, tag: '已完成', done: true }
-  })
-})
-
-const scaleByDate: Record<string, (typeof SCALES)[number]> = {}
-records.forEach((r, idx) => {
-  if (idx % 2 === 0) scaleByDate[r.date] = SCALES[idx % SCALES.length]
-})
-
-const SHARED_DATES = Array.from({ length: 5 }, (_, k) => dateStr(-(4 - k) * 7))
-const scaleHistory: Record<string, { date: string; score: number }[]> = {}
-SCALES.forEach((s, si) => {
-  scaleHistory[s.key] = SHARED_DATES.map((ds, k) => {
-    const seed = si * 37 + k * 17 + s.key.length
-    return { date: ds, score: Math.round(s.max * (0.3 + Math.abs(Math.sin(seed)) * 0.6)) }
-  })
-})
-
 // ============ 筛选状态 ============
 const dataFilter = ref<'all' | 'alert' | 'normal'>('all')
 const activeCol = ref<'urine' | 'stool' | 'water' | 'check' | 'scale'>('urine')
 const range = ref<[string, string]>([dateStr(-29), dateStr(0)])
 
-const filteredRecords = computed(() => {
-  const [start, end] = range.value
-  return records.filter((r) => {
-    const dateMatch = r.date >= start && r.date <= end
-    const dataMatch = dataFilter.value === 'all' || (dataFilter.value === 'alert' ? r.isAlert : !r.isAlert)
-    return dateMatch && dataMatch
-  })
+// ============ 接口数据（api/report.ts getPatientRecords） ============
+const records = ref<RecordRow[]>([])
+const checkins = ref<Record<string, CheckinItem[]>>({})
+const scales = ref<ScaleInfo[]>([])
+const scaleHistory = ref<Record<string, ScalePoint[]>>({})
+const patientName = ref('')
+const loading = ref(false)
+
+async function fetch() {
+  loading.value = true
+  try {
+    // 时间范围被清空时回退默认近 30 天
+    const r = range.value ?? [dateStr(-29), dateStr(0)]
+    const res = await getPatientRecords(String(route.params.id), {
+      startDate: r[0],
+      endDate: r[1],
+      dataStatus: dataFilter.value,
+    })
+    records.value = res.records
+    checkins.value = res.checkins
+    scales.value = res.scales
+    scaleHistory.value = res.scaleHistory
+    patientName.value = res.patientName ?? ''
+  } catch {
+    /* 错误已由 request 统一提示 */
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetch)
+
+/** 日期 → 当日填写的量表名称与颜色（表格“自评量表”列） */
+const scaleByDate = computed<Record<string, { name: string; color: string }>>(() => {
+  const map: Record<string, { name: string; color: string }> = {}
+  for (const row of records.value) {
+    if (!row.scaleName) continue
+    const name = row.scaleName
+    const info = scales.value.find((s) => s.name === name)
+    map[row.date] = {
+      name,
+      color: info ? SCALE_COLORS[info.key] || '#9CA3AF' : '#9CA3AF',
+    }
+  }
+  return map
 })
 
 function colClass(key: string) {
   return activeCol.value === key ? 'active-col' : ''
 }
 
-function onCellClick(row: DayRecord, column: { property?: string }) {
+function onCellClick(row: RecordRow, column: { property?: string }) {
   const key = column.property
   if (key && ['urine', 'stool', 'water', 'check', 'scale'].includes(key)) {
     activeCol.value = key as typeof activeCol.value
@@ -235,8 +218,8 @@ const chartTitle = computed(() => {
   return COLUMNS[activeCol.value].name + '趋势'
 })
 const chartSub = computed(() => {
-  if (activeCol.value === 'scale') return `共 ${SCALES.length} 个量表 · 每个量表近 ${SHARED_DATES.length} 次填写`
-  return `共 ${filteredRecords.value.length} 条记录`
+  if (activeCol.value === 'scale') return `共 ${scales.value.length} 个量表`
+  return `共 ${records.value.length} 条记录`
 })
 const chartTip = computed(() => {
   if (activeCol.value === 'scale') return ''
@@ -246,44 +229,54 @@ const chartTip = computed(() => {
 
 const chartOption = computed<EChartsOption>(() => {
   if (activeCol.value === 'scale') {
+    // x 轴：所有量表填写日期的并集（升序）
+    const dates = Array.from(
+      new Set(Object.values(scaleHistory.value).flatMap((list) => list.map((p) => p.date))),
+    ).sort()
+    const nameColor: Record<string, string> = {}
+    const series = scales.value.map((s) => {
+      const color = SCALE_COLORS[s.key] || '#1E9E8F'
+      nameColor[s.name] = color
+      const scoreByDate = new Map((scaleHistory.value[s.key] || []).map((p) => [p.date, p.score] as const))
+      return {
+        name: s.name,
+        type: 'line' as const,
+        // 按日期并集对齐，缺失日期补 null
+        data: dates.map((d) => scoreByDate.get(d) ?? null),
+        itemStyle: { color },
+        lineStyle: { color, width: 1.8 },
+      }
+    })
     return {
       tooltip: {
         trigger: 'axis',
         formatter: (params: unknown) => {
-          const p = params as { axisValue: string; data: number; seriesName: string; dataIndex: number }[]
-          const first = p[0]
-          const idx = first.dataIndex
+          const p = params as { axisValue: string; seriesName: string; data: number | null }[]
+          if (!p.length) return ''
           const rows = p.map((item) => {
-            const s = SCALES.find((x) => x.name === item.seriesName)!
-            const score = scaleHistory[s.key][idx].score
-            const pct = Math.round((score / s.max) * 100)
-            return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:4px"></span>${s.name}：${score} / ${s.max}（${pct}%）`
+            const color = nameColor[item.seriesName] || '#1E9E8F'
+            const val = item.data == null ? '—' : `${Math.round(item.data)}%`
+            return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:4px"></span>${item.seriesName}：${val}`
           })
-          return `<div>${first.axisValue}</div>${rows.join('<br/>')}`
+          return `<div>${p[0].axisValue}</div>${rows.join('<br/>')}`
         },
       },
-      legend: { data: SCALES.map((s) => s.name), bottom: 0, textStyle: { fontSize: 10 } },
+      legend: { data: scales.value.map((s) => s.name), bottom: 0, textStyle: { fontSize: 10 } },
       grid: { left: 40, right: 20, top: 30, bottom: 40 },
-      xAxis: { type: 'category', data: SHARED_DATES.map((d) => d.slice(5)) },
+      xAxis: { type: 'category', data: dates.map((d) => d.slice(5)) },
       yAxis: { type: 'value', name: '评分(占满分%)', min: 0, max: 100 },
-      series: SCALES.map((s) => ({
-        name: s.name,
-        type: 'line',
-        data: scaleHistory[s.key].map((p) => Math.round((p.score / s.max) * 100)),
-        itemStyle: { color: s.color },
-        lineStyle: { color: s.color, width: 1.8 },
-      })),
+      series,
     }
   }
   const col = COLUMNS[activeCol.value]
-  const list = filteredRecords.value
+  const list = records.value
   return {
     tooltip: {
       trigger: 'axis',
       formatter: (params: unknown) => {
-        const p = params as { axisValue: string; data: number; dataIndex: number }[]
-        const idx = p[0].dataIndex
-        const r = list[idx]
+        const p = params as { dataIndex: number }[]
+        const r = list[p[0]?.dataIndex ?? 0]
+        if (!r) return ''
         return `<div>${r.date}</div>排尿次数：${r.urine} 次<br/>排便次数：${r.stool} 次<br/>饮水量：${r.water} ml`
       },
     },
@@ -295,7 +288,7 @@ const chartOption = computed<EChartsOption>(() => {
         name: col.name,
         type: 'line',
         smooth: true,
-        data: list.map((r) => (r as unknown as Record<string, number>)[activeCol.value]),
+        data: list.map((r) => r[activeCol.value as 'urine' | 'stool' | 'water']),
         itemStyle: { color: col.color },
         lineStyle: { color: col.color, width: 2.5 },
       },

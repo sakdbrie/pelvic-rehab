@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { getToken } from '@/utils/auth'
 
 /**
  * 路由表：静态路由（架构文档：登录、404 静态；权限路由后续接 sys_permission 动态下发）
@@ -116,8 +117,11 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  // TODO: 联调后端时接入登录态校验（token 缺失且非登录页 → 跳 /login）
   document.title = `${String(to.meta.title || '')} - 盆底康复管理 · 网页后台`
+  // 登录态校验：无 token 且非登录页 → 跳登录页（token 存内存，刷新页面后需重新登录；refresh 流程见 request.ts TODO）
+  if (to.name !== 'Login' && !getToken()) {
+    return { name: 'Login' }
+  }
   return true
 })
 

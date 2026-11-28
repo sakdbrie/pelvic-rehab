@@ -1,0 +1,9 @@
+package com.pelvic.patient.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.pelvic.patient.entity.Postpartum;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface PostpartumMapper extends BaseMapper<Postpartum> {
+}

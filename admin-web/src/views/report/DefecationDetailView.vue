@@ -8,7 +8,7 @@
 
     <div class="prototype-card filter-bar">
       <span class="cap">时间筛选：</span>
-      <el-date-picker v-model="range" type="daterange" value-format="YYYY-MM-DD" start-placeholder="起始日期" end-placeholder="结束日期" @change="resetPage" />
+      <el-date-picker v-model="range" type="daterange" value-format="YYYY-MM-DD" start-placeholder="起始日期" end-placeholder="结束日期" @change="doSearch" />
       <div class="search-area">
         <el-input v-model="keyword" placeholder="搜索姓名 / 患者编号" @keyup.enter="doSearch" />
         <el-button type="primary" size="small" @click="doSearch">搜 索</el-button>
@@ -16,7 +16,7 @@
     </div>
 
     <div class="prototype-card" style="padding: 0">
-      <el-table :data="pagedRows" class="prototype-table" height="calc(100vh - 250px)" style="width: 100%">
+      <el-table v-loading="loading" :data="rows" class="prototype-table" height="calc(100vh - 250px)" style="width: 100%">
         <el-table-column prop="id" label="患者编号" width="110" />
         <el-table-column prop="name" label="患者姓名" width="110" />
         <el-table-column prop="date" label="记录日期" width="110" />
@@ -30,23 +30,20 @@
 
     <div class="prototype-card pager-row">
       <span class="info">共 {{ total }} 条，当前显示第 {{ total === 0 ? 0 : (currentPage - 1) * 10 + 1 }}-{{ Math.min(currentPage * 10, total) }} 条</span>
-      <el-pagination v-model:current-page="currentPage" :page-size="10" :total="total" layout="prev, pager, next" background />
+      <el-pagination v-model:current-page="currentPage" :page-size="10" :total="total" layout="prev, pager, next" background @current-change="onPageChange" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { useTablePage } from '@/composables/useTablePage'
-import { submitExportTask } from '@/api/report'
+import { getReportData, exportReport } from '@/api/report'
 
 // 原型图：07-4 排便日记明细表（网页后台）
 const router = useRouter()
 
-// ============ 示例数据（原型占位） ============
-// TODO: 替换为接口数据（api/report.ts getReportData, reportType=defecation）
+// ============ 接口数据（api/report.ts getReportData, reportType=defecation） ============
 function dateStr(offsetDays: number) {
   const d = new Date()
   d.setDate(d.getDate() + offsetDays)
@@ -54,43 +51,55 @@ function dateStr(offsetDays: number) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-const stoolTypes = ['成型', '稀便', '水样便']
-const speeds = ['慢', '正常', '快']
-const volumes = ['少', '正常', '多']
-const names = ['王丽', '李梅', '张伟', '刘芳', '陈静', '杨帆', '赵敏', '孙磊', '周婷', '吴强']
-
-const allRows = Array.from({ length: 60 }, (_, i) => ({
-  id: 'P' + String((i % 10) + 1).padStart(3, '0'),
-  name: names[i % names.length],
-  date: dateStr(-((i * 5) % 30)),
-  stoolType: stoolTypes[i % stoolTypes.length],
-  speed: speeds[i % speeds.length],
-  volume: volumes[i % volumes.length],
-  other: i % 6 === 0 ? '排不尽感' : i % 9 === 0 ? '便失禁' : '—',
-  recordTime: `${dateStr(-((i * 5) % 30))} ${String(7 + (i % 14)).padStart(2, '0')}:${String((i * 23) % 60).padStart(2, '0')}`,
-}))
-
 const range = ref<[string, string]>([dateStr(-29), dateStr(0)])
 const keyword = ref('')
+const rows = ref<Record<string, unknown>[]>([])
+const total = ref(0)
+const loading = ref(false)
+const currentPage = ref(1)
 
-const filterFn = (row: (typeof allRows)[number]) => {
-  const [start, end] = range.value
-  const dateMatch = row.date >= start && row.date <= end
-  const kw = keyword.value.trim().toLowerCase()
-  const searchMatch = kw === '' || (row.id + row.name).toLowerCase().includes(kw)
-  return dateMatch && searchMatch
+function buildParams() {
+  return {
+    startDate: range.value?.[0],
+    endDate: range.value?.[1],
+    keyword: keyword.value.trim() || undefined,
+    page: currentPage.value,
+    size: 10,
+  }
 }
-const { currentPage, total, pagedRows, resetPage } = useTablePage(() => allRows, filterFn, 10)
+
+async function fetch() {
+  loading.value = true
+  try {
+    const res = await getReportData('defecation', buildParams())
+    rows.value = res.records
+    total.value = res.total
+  } catch {
+    /* 错误已由 request 统一提示 */
+  } finally {
+    loading.value = false
+  }
+}
 
 function doSearch() {
-  resetPage()
+  currentPage.value = 1
+  fetch()
 }
 
-function onExport() {
-  // TODO: 联调后端异步导出任务
-  void submitExportTask('defecation', {})
-  ElMessage.success('导出任务已提交（原型占位）')
+function onPageChange(page: number) {
+  currentPage.value = page
+  fetch()
 }
+
+async function onExport() {
+  try {
+    await exportReport('defecation', buildParams())
+  } catch {
+    return
+  }
+}
+
+onMounted(fetch)
 </script>
 
 <style scoped>

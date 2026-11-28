@@ -1,0 +1,817 @@
+@startuml ER图
+left to right direction
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam entity {
+  BackgroundColor #F8FBFF
+  BorderColor #52718D
+  FontColor #263746
+}
+
+package "账号与人员" {
+  entity "统一账号主体" as account {
+    * 账号ID : BIGINT <<PK>>
+    --
+    手机号密文 : VARCHAR(255)
+    手机号HMAC : VARCHAR(128)
+    账号编号 : VARCHAR(64) <<UK>>
+    昵称 : VARCHAR(64)
+    账号状态 : ENUM('PENDING','NORMAL','DISABLED','CANCELLED')
+    注册来源 : ENUM('MINI_PROGRAM','WEB','ADMIN')
+    最后登录时间 : DATETIME
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+
+  entity "网页密码凭证" as account_credential {
+    * 凭证ID : BIGINT <<PK>>
+    --
+    账号ID : BIGINT <<FK, UK>>
+    密码哈希 : VARCHAR(255)
+    密码更新时间 : DATETIME
+    连续失败次数 : INT
+    锁定截止时间 : DATETIME <<NULL>>
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "短信验证码" as auth_sms_code {
+    * 验证码ID : BIGINT <<PK>>
+    --
+    手机号密文 : VARCHAR(255)
+    手机号HMAC : VARCHAR(128)
+    使用场景 : ENUM('REGISTER','LOGIN','BIND_PHONE','RESET_PASSWORD')
+    验证码哈希 : VARCHAR(255)
+    过期时间 : DATETIME
+    使用时间 : DATETIME
+    验证失败次数 : INT
+    发送IP : VARCHAR(45)
+    创建时间 : DATETIME
+  }
+  entity "登录会话" as auth_session {
+    * 会话ID : BIGINT <<PK>>
+    --
+    账号ID : BIGINT <<FK>>
+    客户端类型 : ENUM('WEB_ADMIN','MINI_DOCTOR','MINI_PATIENT')
+    AccessToken哈希 : VARCHAR(255)
+    RefreshToken哈希 : VARCHAR(255)
+    过期时间 : DATETIME
+    撤销时间 : DATETIME
+    最后活跃时间 : DATETIME
+    创建时间 : DATETIME
+  }
+  entity "科室" as department {
+    * 科室ID : BIGINT <<PK>>
+    --
+    科室名称 : VARCHAR(100) <<UK>>
+    科室说明 : VARCHAR(255)
+  }
+  entity "患者档案" as patient {
+    * 患者ID : BIGINT <<PK>>
+    --
+    账号ID : BIGINT <<FK, UK>>
+    患者编号 : VARCHAR(32) <<UK>>
+    住院号 : VARCHAR(50)
+    姓名 : VARCHAR(50)
+    性别 : ENUM('男','女')
+    出生年月 : DATE
+    身高cm : DECIMAL(5,2)
+    体重kg : DECIMAL(5,2)
+    婚姻状况 : VARCHAR(20)
+    教育程度 : VARCHAR(30)
+    从事职业 : VARCHAR(50)
+    备注 : TEXT
+    是否删除 : BOOLEAN
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "医生档案" as doctor {
+    * 医生ID : BIGINT <<PK>>
+    --
+    账号ID : BIGINT <<FK, UK>>
+    编号 : BIGINT <<UK>>
+    科室ID : BIGINT <<FK>>
+    姓名 : VARCHAR(50)
+    性别 : ENUM('男','女')
+    职称 : VARCHAR(50)
+    审核状态 : ENUM('待审核','审核通过','审核未通过')
+    审核通过时间 : DATETIME
+    审核人账号ID : BIGINT <<FK, NULL>>
+    通过或拒绝原因 : VARCHAR(255)
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+}
+
+package "角色权限与访问审计" {
+  entity "系统角色" as sys_role {
+    * 角色ID : BIGINT <<PK>>
+    --
+    角色编码 : VARCHAR(50) <<UK>>
+    角色名称 : VARCHAR(100)
+    数据范围 : ENUM('SELF','ALL_PATIENTS','DEPARTMENT','ASSIGNED')
+    角色状态 : ENUM('启用','停用')
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "功能权限" as sys_permission {
+    * 权限ID : BIGINT <<PK>>
+    --
+    权限编码 : VARCHAR(100) <<UK>>
+    权限名称 : VARCHAR(100)
+    权限类型 : ENUM('MENU','BUTTON','API')
+    父级权限ID : BIGINT <<FK, NULL>>
+    所属模块 : VARCHAR(50)
+    操作类型 : ENUM('VIEW','CREATE','UPDATE','DELETE','EXPORT','REVIEW')
+    前端路由地址 : VARCHAR(255)
+    同级排序号 : SMALLINT
+    权限说明 : VARCHAR(255)
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "账号角色关联" as sys_user_role {
+    * 账号角色关联ID : BIGINT <<PK>>
+    --
+    账号ID : BIGINT <<FK>>
+    角色ID : BIGINT <<FK>>
+    授权人账号ID : BIGINT <<FK, NULL>>
+    授权时间 : DATETIME
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+    UNIQUE(账号ID, 角色ID)
+  }
+  entity "角色权限关联" as sys_role_permission {
+    * 角色权限关联ID : BIGINT <<PK>>
+    --
+    角色ID : BIGINT <<FK>>
+    权限ID : BIGINT <<FK>>
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+    UNIQUE(角色ID, 权限ID)
+  }
+  entity "操作审计日志" as sys_operate_log {
+    * 日志ID : BIGINT <<PK>>
+    --
+    操作账号ID : BIGINT <<FK>>
+    关联患者ID : BIGINT <<FK, NULL>>
+    业务模块 : VARCHAR(50)
+    资源类型 : VARCHAR(50)
+    资源ID : VARCHAR(64) <<NULL>>
+    操作类型 : ENUM('VIEW','CREATE','UPDATE','DELETE','EXPORT','LOGIN','OTHER')
+    操作结果 : ENUM('SUCCESS','DENIED','FAILED')
+    操作原因 : VARCHAR(255) <<NULL>>
+    请求方法 : ENUM('GET','POST','PUT','DELETE') <<NULL>>
+    请求地址 : VARCHAR(255) <<NULL>>
+    请求参数 : TEXT <<NULL>>
+    耗时毫秒 : INT <<NULL>>
+    IP地址 : VARCHAR(45) <<NULL>>
+    userAgent : VARCHAR(512) <<NULL>>
+    操作时间 : DATETIME
+  }
+
+  entity "登录审计日志" as sys_login_log {
+    * 登录日志ID : BIGINT <<PK>>
+    --
+    账号ID : BIGINT <<FK, NULL>>
+    登录方式 : ENUM('SMS_CODE','PASSWORD')
+    客户端类型 : ENUM('WEB_ADMIN','MINI_DOCTOR','MINI_PATIENT')
+    登录结果 : ENUM('SUCCESS','FAILED')
+    失败原因 : VARCHAR(255) <<NULL>>
+    IP地址 : VARCHAR(45)
+    UserAgent : VARCHAR(512)
+    登录时间 : DATETIME
+  }
+}
+
+package "患者信息采集与病史" {
+  entity "患者健康档案" as patient_health_profile {
+    * 健康档案ID : BIGINT <<PK, FK>>
+    --
+    患者ID : BIGINT <<FK, UK>>
+    主诉 : TEXT
+    大便情况 : ENUM('正常','便秘','大便失禁')
+    小便情况 : ENUM('正常','尿痛','尿失禁','尿频尿急','尿潴留')
+    性生活频率次每周 : DECIMAL(5,2)
+    性生活频率次每月 : DECIMAL(5,2)
+    冶游史 : BOOLEAN
+    既往运动及生活补充 : TEXT
+    是否绝经 : BOOLEAN
+    月经持续天数 : SMALLINT
+    月经周期天数 : SMALLINT
+    痛经VAS : TINYINT
+    末次月经日期 : DATE
+    绝经年龄 : TINYINT
+    吸烟支每天 : DECIMAL(6,2)
+    饮酒ml每天 : DECIMAL(8,2)
+    茶咖啡ml每天 : DECIMAL(8,2)
+    久坐小时每天 : DECIMAL(4,1)
+    久站小时每天 : DECIMAL(4,1)
+    其他习惯 : TEXT
+    逻辑删除 : BOOLEAN
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "既往病史项目" as patient_conditions {
+    * 病史项目ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    项目类别 : VARCHAR(40)
+    项目名称 : VARCHAR(100)
+    详情 : TEXT
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "手术史" as surgery_history {
+    * 手术史ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    手术类别 : VARCHAR(50)
+    手术名称 : VARCHAR(255)
+    手术日期 : DATE
+    备注 : TEXT
+    逻辑删除 : BOOLEAN
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "妊娠记录" as pregnancy {
+    * 妊娠记录ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    妊娠序号 : SMALLINT
+    妊娠结局 : VARCHAR(30)
+    孕前体重kg : DECIMAL(5,2)
+    产前体重kg : DECIMAL(5,2)
+    孕期增重kg : DECIMAL(5,2)
+    睡觉体位 : ENUM('左侧','右侧','仰卧')
+    尿失禁 : BOOLEAN
+    大便情况 : ENUM('正常','失禁','便秘')
+    血压情况 : ENUM('高','低','正常')
+    血糖情况 : ENUM('高','低','正常')
+    甲状腺功能 : ENUM('甲亢','甲减','正常')
+    腰背痛VAS : TINYINT
+    耻骨疼痛VAS : TINYINT
+    下肢疼痛VAS : TINYINT
+    妊娠反应等级 : VARCHAR(20)
+    会阴瘙痒 : BOOLEAN
+    饮食情况 : VARCHAR(30)
+    性生活 : BOOLEAN
+    分娩日期 : DATE <<NULL>>
+    分娩方式 : ENUM('顺产','剖宫产') <<NULL>>
+    会阴情况 : ENUM('会阴侧切','会阴撕裂','无损伤') <<NULL>>
+    无痛分娩 : BOOLEAN <<NULL>>
+    头位正常分娩 : BOOLEAN <<NULL>>
+    助产方式 : ENUM('无','产钳','胎头吸引') <<NULL>>
+    胎儿出生体重kg : DECIMAL(5,2) <<NULL>>
+    备注 : TEXT
+    逻辑删除 : BOOLEAN
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+    UNIQUE(患者ID, 妊娠序号)
+  }
+}
+
+package "临床检查与医务人员记录" {
+  entity "临床检查" as examination {
+    * 检查ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    录入医生ID : BIGINT <<FK>>
+    最后修改医生ID : BIGINT <<FK, NULL>>
+    检查时间 : DATETIME
+    主诉 : TEXT
+    腹部张力 : ENUM('正常','增大','降低')
+    诊断 : TEXT
+    药物治疗 : TEXT
+    其他补充 : TEXT
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+
+
+  entity "腹直肌分离评估" as diastasis {
+    * 评估ID : BIGINT <<PK>>
+    --
+    检查ID : BIGINT <<FK, UK>>
+    静息肚脐指宽 : DECIMAL(4,1)
+    静息脐上指宽 : DECIMAL(4,1)
+    静息脐下指宽 : DECIMAL(4,1)
+    收缩肚脐指宽 : DECIMAL(4,1)
+    收缩脐上指宽 : DECIMAL(4,1)
+    收缩脐下指宽 : DECIMAL(4,1)
+  }
+
+
+  entity "产后情况评估" as postpartum {
+    * 评估ID : BIGINT <<PK>>
+    --
+    检查ID : BIGINT <<FK, UK>>
+    小便情况 : ENUM('无','压力性','急迫性','充溢性','混合性')
+    大便情况 : ENUM('正常','失禁','便秘')
+    盆腔会阴痛VAS : TINYINT
+    脏器脱垂 : VARCHAR(50)
+    瘢痕情况 : BOOLEAN
+    瘢痕质地 : VARCHAR(100)
+    瘢痕颜色 : VARCHAR(50)
+    瘢痕时间 : DATE
+    瘢痕长度cm : DECIMAL(5,2)
+    尿道不稳定性 : BOOLEAN
+    其他 : TEXT
+  }
+
+
+  entity "疼痛评估" as pain_assessment {
+    * 疼痛评估ID : BIGINT <<PK>>
+    --
+    检查ID : BIGINT <<FK, UK>>
+    腰背痛左VAS : TINYINT
+    腰背痛右VAS : TINYINT
+    腰背痛中VAS : TINYINT
+    骶髂关节痛左VAS : TINYINT
+    骶髂关节痛右VAS : TINYINT
+    骶髂关节痛中VAS : TINYINT
+    耻骨痛VAS : TINYINT
+    尾骨痛左VAS : TINYINT
+    尾骨痛右VAS : TINYINT
+    尾骨痛中VAS : TINYINT
+    坐骨神经痛左VAS : TINYINT
+    坐骨神经痛右VAS : TINYINT
+    腹股沟痛左VAS : TINYINT
+    腹股沟痛右VAS : TINYINT
+    颈痛左VAS : TINYINT
+    颈痛右VAS : TINYINT
+    上肢痛左VAS : TINYINT
+    上肢痛右VAS : TINYINT
+    下肢痛左VAS : TINYINT
+    下肢痛右VAS : TINYINT
+  }
+
+
+  entity "盆底视诊" as pelvic_inspection {
+    * 视诊ID : BIGINT <<PK>>
+    --
+    检查ID : BIGINT <<FK, UK>>
+    外阴情况 : VARCHAR(30)
+    阴道裂口 : VARCHAR(20)
+    尿道口 : VARCHAR(20)
+    阴蒂 : VARCHAR(20)
+    阴唇对称 : BOOLEAN
+    分泌物情况 : BOOLEAN
+    分泌物颜色 : VARCHAR(50)
+    分泌物气味 : VARCHAR(50)
+    分泌物质地 : VARCHAR(50)
+    分泌物量 : DECIMAL(5,2)
+    阴毛情况 : VARCHAR(20)
+    痔疮情况 : VARCHAR(20)
+    Valsalva表现 : VARCHAR(100)
+  }
+
+
+  entity "一般视诊" as general_inspection {
+    * 视诊ID : BIGINT <<PK>>
+    --
+    检查ID : BIGINT <<FK, UK>>
+    精神面貌 : VARCHAR(20)
+    步行情况 : VARCHAR(20)
+    步行异常描述 : TEXT
+    畸形部位 : VARCHAR(255)
+    肿胀部位 : VARCHAR(255)
+    疤痕部位及大小 : TEXT
+    瘀斑部位及大小 : TEXT
+    肛周生殖器肤色 : VARCHAR(20)
+    肛周皮疹分泌物 : TEXT
+    毛发分布 : VARCHAR(20)
+    直肠脱垂长度cm : DECIMAL(5,2)
+    痔疮情况 : VARCHAR(20)
+  }
+
+
+  entity "特殊检查" as special_exam {
+    * 特殊检查ID : BIGINT <<PK>>
+    --
+    检查ID : BIGINT <<FK, UK>>
+    泌尿生殖测试 : VARCHAR(10)
+    疤痕试验 : VARCHAR(10)
+    4字试验左 : VARCHAR(10)
+    4字试验右 : VARCHAR(10)
+    骨盆分离试验 : VARCHAR(10)
+    骨盆挤压试验 : VARCHAR(10)
+    骶骨下压试验 : VARCHAR(10)
+    股骨冲击试验 : VARCHAR(10)
+    直腿抬高试验 : VARCHAR(10)
+    直腿抬高加强试验 : VARCHAR(10)
+    广泛性触诊试验 : VARCHAR(10)
+    其他 : TEXT
+  }
+
+
+  entity "神经损伤查体" as neurological_exam {
+    * 查体ID : BIGINT <<PK>>
+    --
+    检查ID : BIGINT <<FK, UK>>
+    盆底张力 : ENUM('正常','增高','降低')
+    左侧感觉 : ENUM('正常','减弱','过敏')
+    右侧感觉 : ENUM('正常','减弱','过敏')
+    导尿管 : BOOLEAN
+  }
+
+
+  entity "肛门触诊" as anal_palpation {
+    * 触诊ID : BIGINT <<PK>>
+    --
+    检查ID : BIGINT <<FK, UK>>
+    肛提肌 : VARCHAR(30)
+    坐尾肌 : VARCHAR(30)
+    髂尾肌 : VARCHAR(30)
+    闭孔内肌 : VARCHAR(30)
+    脏器偏移 : VARCHAR(30)
+    牛津肌力 : TINYINT
+    尾骨嵌顿 : BOOLEAN
+    肛周温度 : VARCHAR(20)
+    肛周湿度 : VARCHAR(20)
+    会阴及肛周肌肉张力 : VARCHAR(20)
+  }
+  entity "临床补充记录" as clinical_note {
+    * 临床记录ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    检查ID : BIGINT <<FK, NULL>>
+    医生ID : BIGINT <<FK>>
+    记录类型 : ENUM('外院资料','阶段评估','特殊情况','其他')
+    记录内容 : TEXT
+    可见范围 : ENUM('医务人员')
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "临床资料附件" as clinical_attachment {
+    * 附件ID : BIGINT <<PK>>
+    --
+    临床记录ID : BIGINT <<FK>>
+    上传医生ID : BIGINT <<FK>>
+    文件类别 : VARCHAR(50)
+    文件名称 : VARCHAR(255)
+    文件地址 : VARCHAR(1024)
+    上传时间 : DATETIME
+  }
+}
+
+package "患者日记与远程监测" {
+  entity "排尿记录" as urination_record {
+    * 排尿记录ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    记录类型 : ENUM('饮水','自主排尿','漏尿','间歇导尿')
+    发生时间 : DATETIME
+    饮水量ml : INT
+    自主排尿量ml : INT
+    漏尿量ml : INT
+    导尿量ml : INT
+    残余尿量ml : INT
+    备注 : TEXT
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+    最后修改医生ID : BIGINT <<FK, NULL>>
+    删除时间 : DATETIME
+  }
+  entity "排便记录" as defecation_record {
+    * 排便记录ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    发生时间 : DATETIME
+    大便性状 : ENUM('成型','稀便','水样便')
+    排便速度 : ENUM('慢','正常','快')
+    排便量 : ENUM('少','正常','多')
+    备注 : TEXT
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+    最后修改医生ID : BIGINT <<FK, NULL>>
+    删除时间 : DATETIME
+  }
+  entity "预警规则" as alert_rule {
+    * 预警规则ID : BIGINT <<PK>>
+    --
+    规则名称 : VARCHAR(100)
+    指标类型 : ENUM('单次排尿量','单次漏尿量','饮水量','导尿量','残余尿量','排便次数')
+    比较条件 : ENUM('>','>=','<','<=','=')
+    阈值 : DECIMAL(10,2)
+    统计窗口分钟 : INT
+    预警级别 : ENUM('提示','警告','高危')
+    是否启用 : BOOLEAN
+    更新时间 : DATETIME
+  }
+  entity "异常预警" as alert {
+    * 预警ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    预警规则ID : BIGINT <<FK>>
+    触发排尿记录ID : BIGINT <<FK, NULL>>
+    触发排便记录ID : BIGINT <<FK, NULL>>
+    预警时间 : DATETIME
+    预警内容 : TEXT
+    处理状态 : ENUM('待处理','处理中','已处理','已忽略')
+    处理医生ID : BIGINT <<FK, NULL>>
+    处理时间 : DATETIME
+    处理备注 : TEXT
+  }
+}
+
+package "自评量表" {
+  entity "量表" as questionnaire {
+    * 量表ID : BIGINT <<PK>>
+    --
+    量表编码 : VARCHAR(64)
+    量表名称 : VARCHAR(150)
+    量表说明 : TEXT
+    计分说明 : TEXT
+    状态 : ENUM('草稿','已发布','停用')
+    发布时间 : DATETIME
+    创建人账号ID : BIGINT <<FK>>
+    逻辑删除 : BOOLEAN
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+    UNIQUE(量表编码)
+  }
+  entity "量表题目" as questionnaire_question {
+    * 题目ID : BIGINT <<PK>>
+    --
+    量表ID : BIGINT <<FK>>
+    题号 : VARCHAR(20)
+    题目内容 : TEXT
+    题型 : ENUM('单选','多选','数值','文本')
+    是否必答 : BOOLEAN
+    是否反向计分 : BOOLEAN
+    排序号 : SMALLINT
+    逻辑删除 : BOOLEAN
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "量表选项字典组合" as scale_option_dict {
+    * 组合ID : BIGINT <<PK>>
+    --
+    组合名称 : VARCHAR(150)
+    排序号 : SMALLINT
+    状态 : ENUM('草稿','启用','停用')
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "量表选项字典项" as scale_option_dict_item {
+    * 字典项ID : BIGINT <<PK>>
+    --
+    字典组合ID : BIGINT <<FK>>
+    item_code : VARCHAR(64)
+    item_label : VARCHAR(255)
+    score : DECIMAL(8,2)
+    排序号 : SMALLINT
+    是否启用 : BOOLEAN
+    UNIQUE(字典组合ID, item_code)
+  }
+  entity "量表题目私有选项" as questionnaire_option {
+    * 选项ID : BIGINT <<PK>>
+    --
+    题目ID : BIGINT <<FK>>
+    选项文字 : VARCHAR(255)
+    选项分值 : DECIMAL(8,2)
+    排序号 : SMALLINT
+    字典组合ID : BIGINT <<FK, NULL>>
+    逻辑删除 : BOOLEAN
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+
+  entity "量表填写记录" as questionnaire_submission {
+    * 填写记录ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    量表ID : BIGINT <<FK>>
+    填写时间 : DATETIME
+    填写状态 : ENUM('未完成','已提交')
+    总分 : DECIMAL(8,2)
+    维度得分快照 : JSON
+    评估结果 : TEXT
+    提交时间 : DATETIME
+    医生点评 : TEXT
+    点评医生ID : BIGINT <<FK, NULL>>
+    点评时间 : DATETIME
+    创建时间 : DATETIME
+    更新时间 : DATETIME
+  }
+  entity "量表答案" as questionnaire_answer {
+    * 答案ID : BIGINT <<PK>>
+    --
+    填写记录ID : BIGINT <<FK>>
+    题目ID : BIGINT <<FK>>
+    文本或数值答案 : TEXT
+    得分 : DECIMAL(8,2)
+    创建时间 : DATETIME
+  }
+  entity "答案选项" as answer_option {
+    * 答案ID : BIGINT <<PK, FK>>
+    * 选项ID : BIGINT <<PK, FK>>
+    创建时间 : DATETIME
+  }
+}
+
+package "康复训练与打卡" {
+  entity "训练分类" as training_category {
+    * 分类ID : BIGINT <<PK>>
+    --
+    父分类ID : BIGINT <<FK, NULL>>
+    分类名称 : VARCHAR(100)
+    训练模块 : ENUM('运动训练','盆底训练')
+    排序号 : SMALLINT
+  }
+  entity "训练内容" as training_content {
+    * 内容ID : BIGINT <<PK>>
+    --
+    分类ID : BIGINT <<FK>>
+    内容名称 : VARCHAR(255)
+    内容形式 : ENUM('视频','音频','文本')
+    内容说明 : TEXT
+    内容地址 : VARCHAR(1024)
+    时长秒 : INT
+    排序号 : SMALLINT
+    是否发布 : BOOLEAN
+    创建医生ID : BIGINT <<FK>>
+    创建时间 : DATETIME
+  }
+  entity "训练日程" as training_day {
+    * 训练日程ID : BIGINT <<PK>>
+    --
+    训练日序号 : SMALLINT <<UK>>
+    日程名称 : VARCHAR(100)
+    是否启用 : BOOLEAN
+  }
+  entity "日程训练内容" as training_day_content {
+    * 训练日程ID : BIGINT <<PK, FK>>
+    * 内容ID : BIGINT <<PK, FK>>
+    --
+    排序号 : SMALLINT
+  }
+  entity "训练打卡" as training_checkin {
+    * 打卡ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    内容ID : BIGINT <<FK>>
+    训练日程ID : BIGINT <<FK, NULL>>
+    开始播放时间 : DATETIME
+    完成时间 : DATETIME
+    播放进度百分比 : DECIMAL(5,2)
+    打卡状态 : ENUM('进行中','已完成')
+  }
+}
+
+package "治疗预约与通知" {
+  entity "院区" as clinic_location {
+    * 院区ID : BIGINT <<PK>>
+    --
+    院区名称 : VARCHAR(100) <<UK>>
+    地址 : VARCHAR(255)
+    是否启用 : BOOLEAN
+  }
+  entity "治疗项目" as treatment_item {
+    * 项目ID : BIGINT <<PK>>
+    --
+    项目名称 : VARCHAR(150)
+    项目分类 : VARCHAR(50)
+    项目说明及适应症 : TEXT
+    治疗时长分钟 : SMALLINT
+    预约方式 : ENUM('单独预约','可并行')
+    同时预约人数上限 : SMALLINT
+    是否启用 : BOOLEAN
+    更新时间 : DATETIME
+  }
+  entity "排班例外" as schedule_exception {
+    * 排班例外ID : BIGINT <<PK>>
+    --
+    例外日期 : DATE <<UK>>
+    是否开放预约 : BOOLEAN
+    开始时间 : TIME <<NULL>>
+    结束时间 : TIME <<NULL>>
+    例外说明 : VARCHAR(255)
+    操作账号ID : BIGINT <<FK, NULL>>
+  }
+  entity "可预约时段" as appointment_slot {
+    * 时段ID : BIGINT <<PK>>
+    --
+    项目ID : BIGINT <<FK>>
+    开始时间 : DATETIME
+    结束时间 : DATETIME
+    可预约人数 : SMALLINT
+    已预约人数 : SMALLINT
+    时段状态 : ENUM('开放','关闭')
+  }
+  entity "预约记录" as appointment {
+    * 预约ID : BIGINT <<PK>>
+    --
+    患者ID : BIGINT <<FK>>
+    时段ID : BIGINT <<FK>>
+    院区ID : BIGINT <<FK>>
+    预约状态 : ENUM('待就诊','已完成','已取消','爽约')
+    预约二维码令牌哈希 : VARCHAR(255) <<UK>>
+    预约时间 : DATETIME
+    核销操作人账号ID : BIGINT <<FK, NULL>>
+    核销时间 : DATETIME
+    创建时间 : DATETIME
+  }
+  entity "系统通知" as notification {
+    * 通知ID : BIGINT <<PK>>
+    --
+    接收账号ID : BIGINT <<FK>>
+    预约ID : BIGINT <<FK, NULL>>
+    预警ID : BIGINT <<FK, NULL>>
+    通知渠道 : ENUM('小程序','短信')
+    通知内容 : TEXT
+    发送状态 : ENUM('待发送','已发送','失败')
+    计划发送时间 : DATETIME
+    实际发送时间 : DATETIME
+  }
+}
+
+account ||--o| account_credential : 网页密码凭证
+account ||--o{ auth_session : 创建会话
+account |o--o{ sys_login_log : 登录记录
+account ||--o{ sys_user_role : 拥有角色
+sys_role ||--o{ sys_user_role : 分配给账号
+sys_role ||--o{ sys_role_permission : 包含权限
+sys_permission ||--o{ sys_role_permission : 被角色使用
+account ||--o{ sys_user_role : 授权人
+account ||--o{ sys_operate_log : 执行操作
+patient |o--o{ sys_operate_log : 访问患者数据
+account ||--o| patient : 患者账号
+account ||--o| doctor : 医生账号
+department ||--o{ doctor
+patient ||--o| patient_health_profile
+patient ||--o{ patient_conditions
+patient ||--o{ surgery_history
+patient ||--o{ pregnancy
+patient ||--o{ examination
+doctor ||--o{ examination : 录入
+doctor |o--o{ examination : 最后修改
+examination ||--o| diastasis : 包含
+examination ||--o| postpartum : 包含
+examination ||--o| pain_assessment : 包含
+examination ||--o| pelvic_inspection : 包含
+examination ||--o| general_inspection : 包含
+examination ||--o| special_exam : 包含
+examination ||--o| neurological_exam : 包含
+examination ||--o| anal_palpation : 包含
+patient ||--o{ clinical_note
+doctor ||--o{ clinical_note : 记录
+examination ||--o{ clinical_note
+clinical_note ||--o{ clinical_attachment
+doctor ||--o{ clinical_attachment : 上传
+patient ||--o{ urination_record
+patient ||--o{ defecation_record
+doctor ||--o{ urination_record : 修订
+doctor ||--o{ defecation_record : 修订
+alert_rule ||--o{ alert
+patient ||--o{ alert
+urination_record |o--o{ alert : 排尿触发
+defecation_record |o--o{ alert : 排便触发
+doctor ||--o{ alert : 处理
+questionnaire ||--|{ questionnaire_question
+scale_option_dict ||--o{ scale_option_dict_item
+questionnaire_question ||--o{ questionnaire_option : 配置私有选项
+questionnaire_option ||--o{ answer_option : 被选中
+questionnaire_question ||--o{ questionnaire_answer
+patient ||--o{ questionnaire_submission
+questionnaire ||--o{ questionnaire_submission
+questionnaire_submission ||--o{ questionnaire_answer
+questionnaire_answer ||--o{ answer_option
+doctor ||--o{ questionnaire_submission : 点评
+account ||--o{ questionnaire : 创建
+training_category ||--o{ training_content
+training_category ||--o{ training_category : 父子分类
+doctor ||--o{ training_content : 发布
+training_day ||--o{ training_day_content
+training_content ||--o{ training_day_content
+patient ||--o{ training_checkin
+training_content ||--o{ training_checkin
+training_day ||--o{ training_checkin
+treatment_item ||--o{ appointment_slot
+patient ||--o{ appointment
+appointment_slot ||--o{ appointment
+clinic_location ||--o{ appointment
+account ||--o{ schedule_exception : 操作
+account ||--o{ appointment : 核销
+account ||--o{ notification
+appointment ||--o{ notification
+alert ||--o{ notification
+
+legend bottom
+最终设计说明（依据 README 最终表清单；自评量表不单设维度表和维度得分表）：
+1. 两个院区共用同一套治疗项目、预约时段、容量和开放日期规则；院区表只记录患者实际选择的就诊院区。
+2. 默认周一至周五开放、周六日关闭；排班例外为全局配置，每个日期当前只支持一个连续开放时段。若同一天需要上午、下午多个时段，应增加例外时段明细表。
+3. appointment_slot 不按院区拆分容量；并发预约需通过事务、行锁或原子更新防止超额。已有预约的时段不可直接删除或关闭而不处理已有预约。
+4. appointment 不分配负责医生；核销操作人关联 account，仅用于操作审计。二维码保存令牌哈希，不保存原始可用令牌。
+5. 患者健康档案与 patient 一对一，仅保留最新资料；既往病史项目和手术史因可有多条记录而独立保留。
+6. pregnancy 一行代表一次妊娠，孕期情况及分娩信息并入该表；分娩字段允许为空。已建立(patient_id, pregnancy_no)唯一约束。
+7. examination 仅保存临床检查主信息；diastasis、postpartum、pain_assessment、pelvic_inspection、general_inspection、special_exam、neurological_exam、anal_palpation 八个检查模块分别独立建表，通过 examination_id 关联，且每个模块对同一次检查最多一条记录。未执行的检查模块不创建记录。
+8. 临床检查记录保留最后修改医生及更新时间；不保留修改前后完整内容。
+9. clinical_note、clinical_attachment 继续独立。
+10. 排尿记录与排便记录分表存储；患者提交后不可自行修改，医生修订应保留审计信息。
+11. 量表选项字典仅作为模板；套用时复制为 questionnaire_option 题目私有选项，答卷选项关联题目私有选项。
+12. 量表计分说明及规则归入 questionnaire；总分和维度得分快照保存在 questionnaire_submission，不单设 dimension_score 表。发布后冻结题目、选项及计分规则。
+13. 所有患者使用同一套训练日程；训练打卡保存患者个人进度，完成当日安排后解锁下一训练日。
+14. 患者治疗次数由已完成预约统计得到，不单独维护重复计数。
+15. 患者和医生使用同一账号体系；网页后台、医生端小程序、患者端小程序通过客户端类型（WEB_ADMIN/MINI_DOCTOR/MINI_PATIENT）区分会话；手机号为唯一登录身份（登录名即手机号）。
+endlegend
+@enduml

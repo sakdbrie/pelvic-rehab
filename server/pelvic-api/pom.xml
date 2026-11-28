@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.pelvic</groupId>
+    <artifactId>pelvic-rehab</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+  <artifactId>pelvic-api</artifactId>
+  <name>pelvic-api</name>
+  <description>API 层：聚合全部业务模块（网页后台）</description>
+  <dependencies>
+    <dependency>
+      <groupId>com.pelvic</groupId>
+      <artifactId>module-auth</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.pelvic</groupId>
+      <artifactId>module-system</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.pelvic</groupId>
+      <artifactId>module-patient</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.pelvic</groupId>
+      <artifactId>module-doctor</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.pelvic</groupId>
+      <artifactId>module-report</artifactId>
+    </dependency>
+  </dependencies>
+</project>

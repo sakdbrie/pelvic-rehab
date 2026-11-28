@@ -1,0 +1,50 @@
+server:
+  port: 8080
+  servlet:
+    # 架构约定接口前缀 /api/admin/v1/**：Vite 代理原样转发 /api 前缀
+    context-path: /api
+
+spring:
+  application:
+    name: pelvic-admin
+  profiles:
+    # 默认启用 local 配置：本地敏感配置（数据库密码等）放 application-local.yml（已 git 忽略）
+    active: local
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/pelvic_rehab?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: ${MYSQL_PASSWORD:}
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+mybatis-plus:
+  configuration:
+    # 开发期打印 SQL；生产请移除
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    banner: false
+
+pelvic:
+  security:
+    # accessToken 有效期（秒）
+    token-ttl-seconds: 7200
+    # 免登录路径（前缀匹配）
+    whitelist:
+      - /api/admin/v1/auth/sms-code
+      - /api/admin/v1/auth/login/password
+      - /api/admin/v1/auth/login/sms
+  sms:
+    # 验证码有效期（分钟）
+    code-ttl-minutes: 5
+    # 同一手机号重复发送间隔（秒）
+    resend-interval-seconds: 60
+  encrypt:
+    # 手机号 AES 密钥（16 字节 Base64，开发用；生产必须更换为独立密钥）
+    aes-key: cGVsdmljLXJlaGFiLTE2IQ==
+    # 手机号 HMAC 密钥（开发用；生产必须更换）
+    hmac-key: pelvic-rehab-hmac-key-2026
+  report:
+    # 导出文件目录
+    export-dir: ./export
